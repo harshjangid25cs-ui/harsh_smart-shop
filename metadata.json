@@ -1,0 +1,8 @@
+{
+  "name": "Single Product COD Store Template",
+  "description": "A clean, modern single-product store template with a Cash-on-Delivery (COD) checkout form and Supabase integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
