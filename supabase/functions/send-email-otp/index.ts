@@ -44,7 +44,7 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) throw new Error("Missing RESEND_API_KEY");
 
-    const amountInRupees = (amount / 100).toFixed(2);
+    const amountInRupees = Math.round((amount || 0) / 100).toLocaleString('en-IN');
 
     const emailResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -57,13 +57,16 @@ serve(async (req) => {
         to: email,
         subject: "Your Order Verification Code",
         html: `
-          <div style="font-family: sans-serif; max-w: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
-            <h2 style="color: #333; text-align: center;">Verify Your Order</h2>
-            <p style="color: #555; font-size: 16px;">Please use the following 6-digit code to verify your Cash on Delivery order of ₹${amountInRupees}.</p>
-            <div style="background-color: #f4f4f5; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #111;">${otp}</span>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-w: 520px; margin: 0 auto; padding: 28px; border: 1px solid #eaeaea; border-radius: 16px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <span style="background-color: #111; color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 14px; letter-spacing: 0.5px;">SECURE COD VERIFICATION</span>
             </div>
-            <p style="color: #777; font-size: 14px; text-align: center;">This code will expire in 10 minutes.</p>
+            <h2 style="color: #111; text-align: center; font-size: 22px; margin-top: 10px;">Verify Your COD Order</h2>
+            <p style="color: #444; font-size: 15px; line-height: 1.6; text-align: center;">Please use the following 6-digit verification code to confirm your Cash on Delivery order of <strong>₹${amountInRupees}</strong>.</p>
+            <div style="background-color: #f5f6f8; border: 1px dashed #cccccc; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+              <span style="font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #000;">${otp}</span>
+            </div>
+            <p style="color: #666; font-size: 13px; text-align: center; margin-top: 20px;">This one-time passcode will expire in 10 minutes. Zero advance payment required.</p>
           </div>
         `
       })
