@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Product } from '../types';
-import { Search, Filter, ShoppingCart, Star, Check, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Search, ShoppingCart, Star, Check, Sparkles, SlidersHorizontal, Share2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STORE_CONFIG } from '../config';
 
@@ -447,10 +447,35 @@ function ProductCard({ product, onAddToCart }: {
   product: Product; 
   onAddToCart: (p: Product) => void 
 }) {
+  const [shareLabel, setShareLabel] = React.useState<'share' | 'copied'>('share');
   const discount = product.discount_percent || 0;
   const priceInRupees = Math.round(product.price / 100);
   const originalPrice = discount > 0 ? Math.round(priceInRupees * (1 + discount / 100)) : priceInRupees;
   const displayImage = product.image_url || (product.images && product.images[0]) || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800';
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const productUrl = `${window.location.origin}/product/${product.id}`;
+    const shareData = {
+      title: product.name,
+      text: `Check out ${product.name} for ${STORE_CONFIG.symbol}${priceInRupees.toLocaleString('en-IN')} — Cash on Delivery available!`,
+      url: productUrl,
+    };
+    try {
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        // Native share sheet on Android/iOS
+        await navigator.share(shareData);
+      } else {
+        // Desktop fallback: copy link to clipboard
+        await navigator.clipboard.writeText(productUrl);
+        setShareLabel('copied');
+        setTimeout(() => setShareLabel('share'), 2500);
+      }
+    } catch (err) {
+      // User dismissed the share sheet — silently ignore
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.04)] hover:shadow-[0_12px_30px_rgb(0,0,0,0.1)] border border-gray-100/80 transition-all duration-300 flex flex-col overflow-hidden group">
@@ -500,12 +525,17 @@ function ProductCard({ product, onAddToCart }: {
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Link
-              to={`/product/${product.id}`}
-              className="w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-900 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center"
+            {/* Share button — native share sheet on mobile, clipboard copy on desktop */}
+            <button
+              onClick={handleShare}
+              className="w-full text-center bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-800 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5"
             >
-              Details
-            </Link>
+              {shareLabel === 'copied' ? (
+                <><Check className="w-3.5 h-3.5 text-green-600 stroke-[2.5]" /> Copied!</>
+              ) : (
+                <><Share2 className="w-3.5 h-3.5" /> Share</>
+              )}
+            </button>
             <button
               onClick={() => onAddToCart(product)}
               className="w-full bg-black hover:bg-gray-800 active:scale-95 text-white py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
