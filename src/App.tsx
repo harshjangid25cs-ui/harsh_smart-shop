@@ -6,8 +6,31 @@ import Cart from './pages/Cart';
 import CODCheckout from './components/CODCheckout';
 import AdminDashboard from './components/AdminDashboard';
 import OrderSuccess from './pages/OrderSuccess';
-import { ShieldCheck, Truck, HeadphonesIcon, RotateCcw } from 'lucide-react';
+import { ShieldCheck, Truck, HeadphonesIcon, RotateCcw, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { STORE_CONFIG } from './config';
+
+function CheckoutPage() {
+  return (
+    <div className="min-h-screen bg-[#f5f6f8]">
+      <header className="bg-white border-b border-gray-100 py-3 px-4 sm:px-6 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <Link to="/cart" className="inline-flex items-center gap-2 text-sm font-bold text-gray-700 hover:text-black transition-colors min-h-11">
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Cart</span>
+          </Link>
+          <span className="text-sm font-black text-gray-900 tracking-tight">{STORE_CONFIG.name || 'SmartShop'}</span>
+          <Link to="/cart" className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-11">
+            <ShoppingCart className="w-3.5 h-3.5" /> Cart
+          </Link>
+        </div>
+      </header>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <CODCheckout />
+      </div>
+    </div>
+  );
+}
+
 
 function Footer() {
   return (
@@ -57,7 +80,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<ProductGrid />} />
             <Route path="/cart" element={<Cart />} />
-            <Route path="/checkout" element={<CODCheckout />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/order-success" element={<OrderSuccess />} />
             <Route path="/checkout/success" element={<OrderSuccess />} />
             <Route path="/product/:id" element={<Storefront />} />

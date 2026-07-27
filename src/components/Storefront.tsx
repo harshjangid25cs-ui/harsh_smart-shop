@@ -131,9 +131,9 @@ export default function Storefront() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-16 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-12 items-start">
 
-          <div className="w-full lg:sticky lg:top-24">
+          <div className="w-full xl:sticky xl:top-24">
             <ImageSlider
               images={allImages}
               productName={product.name}
@@ -225,7 +225,7 @@ export default function Storefront() {
                 >
                   ← Back to Product Description
                 </button>
-                <CODCheckout product={product} />
+                <CODCheckout product={product} embedded={true} />
               </div>
             )}
           </div>

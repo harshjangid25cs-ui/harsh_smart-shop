@@ -14,7 +14,7 @@ const STAGES = {
   CONFIRMATION: 'confirmation'
 };
 
-export default function CODCheckout({ product }: { product?: Product }) {
+export default function CODCheckout({ product, embedded = false }: { product?: Product; embedded?: boolean }) {
   const navigate = useNavigate();
   const [stage, setStage] = useState(STAGES.PINCODE_CHECK);
   const [formData, setFormData] = useState({
@@ -189,7 +189,7 @@ export default function CODCheckout({ product }: { product?: Product }) {
   const displayPriceINR = Math.round(totalAmount / 100).toLocaleString('en-IN');
 
   return (
-    <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 overflow-hidden my-4 sm:my-6 max-w-6xl mx-auto">
+    <div className={`bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 overflow-hidden ${embedded ? 'mt-0' : 'my-4 sm:my-6 max-w-4xl mx-auto'}`}>
       {/* Progress Header */}
       <div className="bg-gray-50 border-b border-gray-100 p-4 sm:p-6 flex justify-between items-center">
         <div>
@@ -218,24 +218,22 @@ export default function CODCheckout({ product }: { product?: Product }) {
           </div>
         )}
 
-        <div className={stage !== STAGES.CONFIRMATION ? "lg:grid lg:grid-cols-[1fr_380px] lg:gap-8 items-start" : ""}>
+        <div className={stage !== STAGES.CONFIRMATION && !embedded ? "xl:grid xl:grid-cols-[1fr_360px] xl:gap-8 items-start" : ""}>
           {/* LEFT COLUMN — Customer Form */}
           <div>
-            {/* Mobile-only: collapsible order summary accordion */}
+            {/* Collapsible order summary accordion — hidden on xl when embedded in Storefront's own 2-col layout */}
             {stage !== STAGES.CONFIRMATION && items.length > 0 && (
-              <div className="lg:hidden mb-6 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+              <div className={`${embedded ? 'block' : 'xl:hidden'} mb-4 bg-white rounded-2xl border border-gray-200 overflow-hidden`}>
                 <button
                   onClick={() => setSummaryOpen(!summaryOpen)}
                   type="button"
-                  className="w-full flex items-center justify-between px-4 py-3 text-xs sm:text-sm font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 transition-colors min-h-11"
+                  className="w-full flex items-center justify-between px-4 py-3 text-xs font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 transition-colors min-h-11"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span>Order Summary {isMultiItem ? `(${totalItems} items)` : ''} ·</span>
-                    <span className="text-black font-black">
-                      {STORE_CONFIG.symbol || '₹'}{displayPriceINR}
-                    </span>
+                  <span className="flex items-center gap-1.5 min-w-0 mr-2">
+                    <span className="truncate">Order Summary{isMultiItem ? ` (${totalItems})` : ''}</span>
+                    <span className="text-black font-black shrink-0">· {STORE_CONFIG.symbol || '₹'}{displayPriceINR}</span>
                   </span>
-                  {summaryOpen ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronDown className="w-4 h-4 text-gray-600" />}
+                  {summaryOpen ? <ChevronUp className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" />}
                 </button>
                 {summaryOpen && (
                   <div className="border-t border-gray-100 p-4">
@@ -534,15 +532,15 @@ export default function CODCheckout({ product }: { product?: Product }) {
             )}
           </div>
 
-          {/* RIGHT COLUMN — Desktop Order Summary (sticky) */}
-          {stage !== STAGES.CONFIRMATION && (
-            <div className="hidden lg:block">
+          {/* RIGHT COLUMN — Desktop Order Summary (sticky, only on standalone /checkout at xl+) */}
+          {stage !== STAGES.CONFIRMATION && !embedded && (
+            <div className="hidden xl:block">
               <div className="sticky top-24">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <span>Order Summary</span>
                   {isMultiItem && <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">({totalItems} items)</span>}
                 </h3>
-                <OrderSummaryPanel items={items} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm" />
+                <OrderSummaryPanel items={items} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm" />
               </div>
             </div>
           )}
