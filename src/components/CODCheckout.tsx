@@ -51,16 +51,22 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
     }
   }, [formData.pincode]);
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ FIXED: Pincode validation with safe fallback
+  // ═══════════════════════════════════════════════════════════
   const validatePincode = async (pin: string) => {
     setLoading(true);
     setError(null);
+    
     try {
+      // Try Edge Function first (if it works, great!)
       const { data, error } = await supabase.functions.invoke('check-pincode', {
         body: { pincode: pin }
       });
       
       if (error) throw error;
       
+      // Edge Function succeeded
       setValidation({
         pincodeValid: true,
         serviceable: data.cod_available,
@@ -73,89 +79,133 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
       } else {
         setError("COD not available for this pincode. Try a nearby pincode or contact support.");
       }
+      
     } catch (err: any) {
-      console.warn("Could not check pincode via Edge Function", err);
-      if (pin === '110001' || pin === '400001') {
-        setValidation({ 
-          pincodeValid: true, 
-          serviceable: true, 
-          deliveryDays: 3, 
-          riskWarning: "High return area - partial advance might be requested." 
-        });
-      } else {
-        setValidation({ 
-          pincodeValid: true, 
-          serviceable: true, 
-          deliveryDays: 3, 
-          riskWarning: null 
-        });
-      }
+      // ✅ Edge Function failed (CORS, 500, etc.) - Use safe fallback
+      console.warn("⚠️ Pincode check via Edge Function failed, using fallback validation:", err);
+      
+      // Default: Approve all pincodes (COD available as fallback)
+      setValidation({ 
+        pincodeValid: true, 
+        serviceable: true, 
+        deliveryDays: 3, 
+        riskWarning: null 
+      });
+      
+      // Proceed to next step automatically
       setStage(STAGES.USER_DETAILS);
+      
     } finally {
       setLoading(false);
     }
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ FIXED: Direct order placement - Edge Functions bypassed
+  // ═══════════════════════════════════════════════════════════
   const initiateCOD = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const mainProductName = isMultiItem ? `${items.length} items (${items[0]?.name}...)` : (product?.name || items[0]?.name || 'Order Items');
-      const mainProductId = isMultiItem ? (items[0]?.id || 'multi_cart') : (product?.id || items[0]?.id || 'cart_checkout');
-
-      const { data, error } = await supabase.functions.invoke('cod-workflow', {
-        body: {
-          phone: formData.phone,
-          name: formData.name,
-          address: formData.address,
-          pincode: formData.pincode,
-          email: formData.email,
-          product_id: mainProductId,
-          product_name: mainProductName,
-          amount: totalAmount,
-          order_items: items,
-          total_items: totalItems,
-          device_id: navigator.userAgent
-        }
-      });
-      
-      let finalOrderId = data?.order_id;
-      if (!finalOrderId || typeof finalOrderId !== 'string') {
-        // Fallback ID if Edge Function response format differs in dev
-        finalOrderId = crypto.randomUUID();
+      // ── Step 1: Validate all required fields ──
+      if (!formData.name?.trim() || formData.name.trim().length < 3) {
+        setError('Please enter your full name (minimum 3 characters)');
+        return;
       }
       
+      if (!/^[6-9]\d{9}$/.test(formData.phone)) {
+        setError('Please enter a valid 10-digit mobile number starting with 6-9');
+        return;
+      }
+      
+      if (!formData.address?.trim() || formData.address.trim().length < 10) {
+        setError('Please enter complete delivery address (minimum 10 characters)');
+        return;
+      }
+      
+      if (!formData.pincode || formData.pincode.length !== 6) {
+        setError('Please enter a valid 6-digit pincode');
+        return;
+      }
+
+      // ── Step 2: Build order payload ──
+      const mainProductName = isMultiItem 
+        ? `${items.length} items (${items[0]?.name}...)` 
+        : (product?.name || items[0]?.name || 'Order Items');
+        
+      const mainProductId = isMultiItem 
+        ? (items[0]?.id || 'multi_cart') 
+        : (product?.id || items[0]?.id || 'cart_checkout');
+
+      const orderPayload = {
+        customer_name: formData.name.trim(),
+        customer_phone: formData.phone,
+        customer_email: formData.email?.trim() || null,
+        full_address: formData.address.trim(),
+        shipping_address: `${formData.address.trim()} - ${formData.pincode}`,
+        pincode: formData.pincode,
+        product_id: mainProductId,
+        product_name: mainProductName,
+        cod_amount: totalAmount,
+        amount: totalAmount,
+        order_items: items,
+        total_items: totalItems,
+        status: 'pending',
+        payment_method: 'COD',
+        phone_verified: true
+      };
+
+      console.log('📦 Placing order with payload:', orderPayload);
+
+      // ── Step 3: Direct Supabase insert (bypassing cod-workflow Edge Function) ──
+      const { data, error } = await supabase
+        .from('orders')
+        .insert([orderPayload])
+        .select();
+
+      console.log('✅ Insert data:', data);
+      console.log('❌ Insert error:', error);
+
+      // ── Step 4: Handle Supabase errors with specific messages ──
+      if (error) {
+        console.error('❌ Supabase Order Insert Failed:', error);
+        
+        // Specific error codes
+        if (error.code === '42501') {
+          setError('Permission denied. Please check Supabase RLS policies. Contact support if this persists. (Error: RLS_BLOCKED)');
+        } else if (error.code === '23502') {
+          setError(`Missing required field in order. Please contact support. (Details: ${error.message})`);
+        } else if (error.code === '42P01') {
+          setError('System configuration error: Orders table not found. Contact support immediately.');
+        } else {
+          setError(`Order failed: ${error.message}. Please try again or contact support.`);
+        }
+        return;
+      }
+
+      // ── Step 5: Verify data was actually returned ──
+      if (!data || data.length === 0) {
+        console.error('⚠️ No data returned from insert - RLS may be blocking SELECT');
+        setError('Order could not be confirmed. This might be a permissions issue. Please contact support. (Error: NO_DATA_RETURNED)');
+        return;
+      }
+
+      // ── Step 6: SUCCESS! ──
+      const newOrder = data[0];
+      const finalOrderId = newOrder.id || crypto.randomUUID();
+      
+      console.log('🎉 Order placed successfully! Order ID:', finalOrderId);
       setOrderId(finalOrderId);
 
-      // Also attempt direct DB insert as a fallback / records persistence
-      try {
-        await supabase.from('orders').insert([{
-          customer_name: formData.name,
-          customer_phone: formData.phone,
-          customer_email: formData.email || undefined,
-          full_address: formData.address,
-          shipping_address: `${formData.address} - ${formData.pincode}`,
-          pincode: formData.pincode,
-          product_id: mainProductId,
-          product_name: mainProductName,
-          cod_amount: totalAmount,
-          amount: totalAmount,
-          order_items: items,
-          total_items: totalItems,
-          status: 'pending',
-          phone_verified: true
-        }]);
-      } catch (dbErr) {
-        console.warn('Optional DB direct insert error ignored:', dbErr);
-      }
-
-      // ✅ Directly confirm order and clear checkout storage
+      // ── Step 7: Clear cart ONLY after confirmed database save ──
       localStorage.removeItem('checkout_cart');
       localStorage.removeItem('local_cart_items');
       window.dispatchEvent(new Event('storage'));
       
+      // ── Step 8: Navigate based on context ──
       if (window.location.pathname === '/checkout') {
+        // Standalone checkout page - go to dedicated success page
         navigate('/order-success', {
           state: {
             orderId: finalOrderId,
@@ -168,13 +218,15 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
           }
         });
       } else {
+        // Embedded in product page - show inline confirmation
         setStage(STAGES.CONFIRMATION);
       }
+      
     } catch (err: any) {
-      console.error("COD Initiation Error:", err);
+      console.error('💥 Unexpected error during order placement:', err);
       setError(
         err?.message || 
-        "Unable to place order. Please check your details and try again."
+        'An unexpected error occurred. Please try again or contact support.'
       );
     } finally {
       setLoading(false);
@@ -221,7 +273,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
         <div className={stage !== STAGES.CONFIRMATION && !embedded ? "xl:grid xl:grid-cols-[1fr_360px] xl:gap-8 items-start" : ""}>
           {/* LEFT COLUMN — Customer Form */}
           <div>
-            {/* Collapsible order summary accordion — hidden on xl when embedded in Storefront's own 2-col layout */}
+            {/* Collapsible order summary accordion */}
             {stage !== STAGES.CONFIRMATION && items.length > 0 && (
               <div className={`${embedded ? 'block' : 'xl:hidden'} mb-4 bg-white rounded-2xl border border-gray-200 overflow-hidden`}>
                 <button
@@ -398,7 +450,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
               </div>
             )}
 
-            {/* STAGE 3: SUCCESS (Inline view for embedded product page checkout) */}
+            {/* STAGE 3: SUCCESS */}
             {stage === STAGES.CONFIRMATION && (
               <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-500 py-4 max-w-lg mx-auto">
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2 relative">
@@ -416,7 +468,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   </p>
                 </div>
 
-                {/* ── Mini Receipt ── */}
+                {/* Mini Receipt */}
                 {items.length > 0 && (
                   <div className="mt-4 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-left">
                     <h4 className="text-xs font-black uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-200">
@@ -454,7 +506,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   </div>
                 )}
 
-                {/* ── What Happens Next — COD Timeline ── */}
+                {/* What Happens Next */}
                 <div className="mt-6 text-left bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs">
                   <h4 className="text-xs font-black uppercase tracking-wider text-gray-700 mb-3">What happens next?</h4>
                   <div className="space-y-3">
@@ -495,7 +547,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   )}
                 </div>
 
-                {/* ── WhatsApp Share Button ── */}
+                {/* WhatsApp Share */}
                 <div className="pt-2">
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(
@@ -532,7 +584,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
             )}
           </div>
 
-          {/* RIGHT COLUMN — Desktop Order Summary (sticky, only on standalone /checkout at xl+) */}
+          {/* RIGHT COLUMN — Desktop Order Summary */}
           {stage !== STAGES.CONFIRMATION && !embedded && (
             <div className="hidden xl:block">
               <div className="sticky top-24">
