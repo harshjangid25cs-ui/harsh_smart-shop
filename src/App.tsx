@@ -5,6 +5,7 @@ import Storefront from './components/Storefront';
 import Cart from './pages/Cart';
 import CODCheckout from './components/CODCheckout';
 import AdminDashboard from './components/AdminDashboard';
+import OrderSuccess from './pages/OrderSuccess';
 import { ShieldCheck, Truck, HeadphonesIcon, RotateCcw } from 'lucide-react';
 import { STORE_CONFIG } from './config';
 
@@ -57,6 +58,8 @@ export default function App() {
             <Route path="/" element={<ProductGrid />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<CODCheckout />} />
+            <Route path="/order-success" element={<OrderSuccess />} />
+            <Route path="/checkout/success" element={<OrderSuccess />} />
             <Route path="/product/:id" element={<Storefront />} />
             <Route path="/admin" element={<AdminDashboard />} />
           </Routes>

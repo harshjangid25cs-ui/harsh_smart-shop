@@ -196,7 +196,7 @@ export default function ProductGrid() {
       console.warn("Using offline demo product dataset:", err);
       setProducts(FALLBACK_PRODUCTS);
       setHasMore(false);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   }, [filters, page]);
