@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { STORE_CONFIG } from '../config';
 import { Product } from '../types';
-import { ShieldCheck, Truck, Lock, MapPin, CheckCircle2, Loader2, AlertCircle, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, Truck, Lock, MapPin, CheckCircle2, Loader2, AlertCircle, Mail, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { useCartCheckout } from '../hooks/useCartCheckout';
 import OrderSummaryPanel from './checkout/OrderSummaryPanel';
 import { CartItem } from '../types/cart';
@@ -22,143 +22,156 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
     phone: '',
     name: '',
     address: '',
+    city: '',        // ✅ ADDED — required by DB schema (NOT NULL)
     email: ''
   });
-  
+
   const [validation, setValidation] = useState({
     pincodeValid: false,
     serviceable: false,
     deliveryDays: null as number | null,
     riskWarning: null as string | null
   });
-  
+
   const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Multi-item cart hook — reads localStorage OR falls back to single product prop
   const { items, totalAmount, totalItems, isMultiItem } = useCartCheckout({
     singleProduct: product ?? null,
     singleQuantity: 1,
   });
 
-  const [summaryOpen, setSummaryOpen] = useState(false); // mobile accordion
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
-  // Real-time pincode validation
   useEffect(() => {
     if (formData.pincode.length === 6) {
       validatePincode(formData.pincode);
     }
   }, [formData.pincode]);
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ FIXED: Pincode validation with safe fallback
-  // ═══════════════════════════════════════════════════════════
   const validatePincode = async (pin: string) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Try Edge Function first (if it works, great!)
       const { data, error } = await supabase.functions.invoke('check-pincode', {
         body: { pincode: pin }
       });
-      
+
       if (error) throw error;
-      
-      // Edge Function succeeded
+
       setValidation({
         pincodeValid: true,
         serviceable: data.cod_available,
         deliveryDays: data.estimated_days,
         riskWarning: data.rto_risk ? "High return area - May require confirmation call" : null
       });
-      
+
       if (data.cod_available) {
         setStage(STAGES.USER_DETAILS);
       } else {
         setError("COD not available for this pincode. Try a nearby pincode or contact support.");
       }
-      
+
     } catch (err: any) {
-      // ✅ Edge Function failed (CORS, 500, etc.) - Use safe fallback
       console.warn("⚠️ Pincode check via Edge Function failed, using fallback validation:", err);
-      
-      // Default: Approve all pincodes (COD available as fallback)
-      setValidation({ 
-        pincodeValid: true, 
-        serviceable: true, 
-        deliveryDays: 3, 
-        riskWarning: null 
+
+      setValidation({
+        pincodeValid: true,
+        serviceable: true,
+        deliveryDays: 3,
+        riskWarning: null
       });
-      
-      // Proceed to next step automatically
+
       setStage(STAGES.USER_DETAILS);
-      
+
     } finally {
       setLoading(false);
     }
   };
 
   // ═══════════════════════════════════════════════════════════
-  // ✅ FIXED: Direct order placement - Edge Functions bypassed
+  // ✅ FIXED: orderPayload now matches actual `orders` table columns
   // ═══════════════════════════════════════════════════════════
   const initiateCOD = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // ── Step 1: Validate all required fields ──
       if (!formData.name?.trim() || formData.name.trim().length < 3) {
         setError('Please enter your full name (minimum 3 characters)');
         return;
       }
-      
+
       if (!/^[6-9]\d{9}$/.test(formData.phone)) {
         setError('Please enter a valid 10-digit mobile number starting with 6-9');
         return;
       }
-      
+
       if (!formData.address?.trim() || formData.address.trim().length < 10) {
         setError('Please enter complete delivery address (minimum 10 characters)');
         return;
       }
-      
+
+      if (!formData.city?.trim() || formData.city.trim().length < 2) {
+        setError('Please enter your city');
+        return;
+      }
+
       if (!formData.pincode || formData.pincode.length !== 6) {
         setError('Please enter a valid 6-digit pincode');
         return;
       }
 
-      // ── Step 2: Build order payload ──
-      const mainProductName = isMultiItem 
-        ? `${items.length} items (${items[0]?.name}...)` 
+      // ── Step 2: Build product name / variant info ──
+      const mainProductName = isMultiItem
+        ? `${items.length} items (${items[0]?.name}...)`
         : (product?.name || items[0]?.name || 'Order Items');
-        
-      const mainProductId = isMultiItem 
-        ? (items[0]?.id || 'multi_cart') 
-        : (product?.id || items[0]?.id || 'cart_checkout');
+
+      const mainProductVariant = isMultiItem
+        ? null
+        : ([items[0]?.size, items[0]?.color].filter(Boolean).join(' / ') || null);
+
+      // Since there's no columns for pincode/amount/cart items breakdown,
+      // we stash that extra context inside `notes` as JSON so nothing is lost.
+      const extraDetailsNote = JSON.stringify({
+        pincode: formData.pincode,
+        amount_paise: totalAmount,
+        total_items: totalItems,
+        items: items.map((i: CartItem) => ({
+          id: i.id,
+          name: i.name,
+          qty: i.quantity,
+          price: i.price,
+          size: i.size,
+          color: i.color,
+        })),
+      });
+
+      // ✅ customer_email is NOT NULL in DB — fallback if user leaves it blank
+      const safeCustomerEmail = formData.email?.trim() || `${formData.phone}@no-email.placeholder`;
 
       const orderPayload = {
         customer_name: formData.name.trim(),
-        customer_phone: formData.phone,
-        customer_email: formData.email?.trim() || null,
-        full_address: formData.address.trim(),
-        shipping_address: `${formData.address.trim()} - ${formData.pincode}`,
-        pincode: formData.pincode,
-        product_id: mainProductId,
+        phone: formData.phone,
+        email: formData.email?.trim() || null,     // nullable, optional
+        customer_email: safeCustomerEmail,          // NOT NULL — always populated
+        city: formData.city.trim(),                 // NOT NULL — was missing before!
+        address: formData.address.trim(),
+        country: 'India',
         product_name: mainProductName,
-        cod_amount: totalAmount,
-        amount: totalAmount,
-        order_items: items,
-        total_items: totalItems,
+        product_variant: mainProductVariant,
+        quantity: totalItems || 1,
+        notes: extraDetailsNote,
         status: 'pending',
-        payment_method: 'COD',
-        phone_verified: true
+        verification_method: 'COD',
       };
 
       console.log('📦 Placing order with payload:', orderPayload);
 
-      // ── Step 3: Direct Supabase insert (bypassing cod-workflow Edge Function) ──
+      // ── Step 3: Direct Supabase insert ──
       const { data, error } = await supabase
         .from('orders')
         .insert([orderPayload])
@@ -167,11 +180,9 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
       console.log('✅ Insert data:', data);
       console.log('❌ Insert error:', error);
 
-      // ── Step 4: Handle Supabase errors with specific messages ──
       if (error) {
         console.error('❌ Supabase Order Insert Failed:', error);
-        
-        // Specific error codes
+
         if (error.code === '42501') {
           setError('Permission denied. Please check Supabase RLS policies. Contact support if this persists. (Error: RLS_BLOCKED)');
         } else if (error.code === '23502') {
@@ -184,28 +195,23 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
         return;
       }
 
-      // ── Step 5: Verify data was actually returned ──
       if (!data || data.length === 0) {
         console.error('⚠️ No data returned from insert - RLS may be blocking SELECT');
         setError('Order could not be confirmed. This might be a permissions issue. Please contact support. (Error: NO_DATA_RETURNED)');
         return;
       }
 
-      // ── Step 6: SUCCESS! ──
       const newOrder = data[0];
       const finalOrderId = newOrder.id || crypto.randomUUID();
-      
+
       console.log('🎉 Order placed successfully! Order ID:', finalOrderId);
       setOrderId(finalOrderId);
 
-      // ── Step 7: Clear cart ONLY after confirmed database save ──
       localStorage.removeItem('checkout_cart');
       localStorage.removeItem('local_cart_items');
       window.dispatchEvent(new Event('storage'));
-      
-      // ── Step 8: Navigate based on context ──
+
       if (window.location.pathname === '/checkout') {
-        // Standalone checkout page - go to dedicated success page
         navigate('/order-success', {
           state: {
             orderId: finalOrderId,
@@ -218,14 +224,13 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
           }
         });
       } else {
-        // Embedded in product page - show inline confirmation
         setStage(STAGES.CONFIRMATION);
       }
-      
+
     } catch (err: any) {
       console.error('💥 Unexpected error during order placement:', err);
       setError(
-        err?.message || 
+        err?.message ||
         'An unexpected error occurred. Please try again or contact support.'
       );
     } finally {
@@ -233,16 +238,15 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
     }
   };
 
-  const currentStepNumber = 
+  const currentStepNumber =
     stage === STAGES.PINCODE_CHECK ? 1 :
-    stage === STAGES.USER_DETAILS ? 2 :
-    stage === STAGES.CONFIRMATION ? 3 : 1;
+      stage === STAGES.USER_DETAILS ? 2 :
+        stage === STAGES.CONFIRMATION ? 3 : 1;
 
   const displayPriceINR = Math.round(totalAmount / 100).toLocaleString('en-IN');
 
   return (
     <div className={`bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 overflow-hidden ${embedded ? 'mt-0' : 'my-4 sm:my-6 max-w-4xl mx-auto'}`}>
-      {/* Progress Header */}
       <div className="bg-gray-50 border-b border-gray-100 p-4 sm:p-6 flex justify-between items-center">
         <div>
           <h2 className="font-bold text-gray-900 flex items-center gap-2 text-base sm:text-lg">
@@ -271,9 +275,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
         )}
 
         <div className={stage !== STAGES.CONFIRMATION && !embedded ? "xl:grid xl:grid-cols-[1fr_360px] xl:gap-8 items-start" : ""}>
-          {/* LEFT COLUMN — Customer Form */}
           <div>
-            {/* Collapsible order summary accordion */}
             {stage !== STAGES.CONFIRMATION && items.length > 0 && (
               <div className={`${embedded ? 'block' : 'xl:hidden'} mb-4 bg-white rounded-2xl border border-gray-200 overflow-hidden`}>
                 <button
@@ -295,7 +297,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
               </div>
             )}
 
-            {/* STAGE 1: PINCODE */}
             {stage === STAGES.PINCODE_CHECK && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div>
@@ -306,14 +307,14 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                 </div>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="e.g. 110001"
                     maxLength={6}
                     value={formData.pincode}
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
-                      setFormData({...formData, pincode: val});
+                      setFormData({ ...formData, pincode: val });
                     }}
                     disabled={loading}
                     className="w-full pl-12 pr-4 py-4 min-h-11 rounded-2xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-black outline-none transition-all text-lg sm:text-xl tracking-widest font-bold text-gray-900"
@@ -321,19 +322,18 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                 </div>
                 {loading && (
                   <div className="text-xs sm:text-sm text-gray-500 flex items-center justify-center gap-2 py-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-black" /> 
+                    <Loader2 className="w-4 h-4 animate-spin text-black" />
                     <span>Checking express logistics partners...</span>
                   </div>
                 )}
               </div>
             )}
 
-            {/* STAGE 2: DETAILS */}
             {stage === STAGES.USER_DETAILS && (
               <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900">Delivery Details</h3>
-                  <button 
+                  <button
                     onClick={() => setStage(STAGES.PINCODE_CHECK)}
                     type="button"
                     className="text-xs sm:text-sm text-blue-600 font-bold hover:underline min-h-11 flex items-center"
@@ -351,7 +351,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                     </div>
                   </div>
                 )}
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold uppercase text-gray-600 mb-1">Full Name *</label>
@@ -361,7 +361,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                       placeholder="Full Name (e.g. Rahul Kumar)"
                       className="w-full px-4 py-3.5 min-h-11 rounded-xl bg-gray-50 border border-gray-200 text-sm sm:text-base font-semibold focus:bg-white focus:border-black outline-none transition-all text-gray-900"
                       value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </div>
 
@@ -376,7 +376,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                         maxLength={10}
                         className="w-full pl-12 pr-4 py-3.5 min-h-11 rounded-xl bg-gray-50 border border-gray-200 text-sm sm:text-base font-semibold focus:bg-white focus:border-black outline-none transition-all text-gray-900"
                         value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/\D/g, '')})}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
                       />
                     </div>
                   </div>
@@ -390,7 +390,23 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                         placeholder="For instant email invoices and updates"
                         className="w-full pl-11 pr-4 py-3.5 min-h-11 rounded-xl bg-gray-50 border border-gray-200 text-sm sm:text-base font-semibold focus:bg-white focus:border-black outline-none transition-all text-gray-900"
                         value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ✅ NEW: City field — required by DB schema */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-gray-600 mb-1">City *</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. New Delhi"
+                        className="w-full pl-11 pr-4 py-3.5 min-h-11 rounded-xl bg-gray-50 border border-gray-200 text-sm sm:text-base font-semibold focus:bg-white focus:border-black outline-none transition-all text-gray-900"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                       />
                     </div>
                   </div>
@@ -403,7 +419,7 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                       rows={3}
                       className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-sm sm:text-base font-semibold focus:bg-white focus:border-black outline-none transition-all resize-none text-gray-900"
                       value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     />
                   </div>
                 </div>
@@ -423,14 +439,15 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={initiateCOD}
                   type="button"
                   disabled={
-                    loading || 
-                    formData.name.trim().length < 3 || 
-                    !/^[6-9]\d{9}$/.test(formData.phone) || 
-                    formData.address.trim().length < 10
+                    loading ||
+                    formData.name.trim().length < 3 ||
+                    !/^[6-9]\d{9}$/.test(formData.phone) ||
+                    formData.address.trim().length < 10 ||
+                    formData.city.trim().length < 2
                   }
                   className="w-full min-h-11 bg-black text-white py-4 rounded-2xl font-black text-base sm:text-lg hover:bg-gray-800 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                 >
@@ -450,7 +467,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
               </div>
             )}
 
-            {/* STAGE 3: SUCCESS */}
             {stage === STAGES.CONFIRMATION && (
               <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-500 py-4 max-w-lg mx-auto">
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2 relative">
@@ -468,7 +484,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   </p>
                 </div>
 
-                {/* Mini Receipt */}
                 {items.length > 0 && (
                   <div className="mt-4 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-left">
                     <h4 className="text-xs font-black uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-200">
@@ -506,7 +521,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   </div>
                 )}
 
-                {/* What Happens Next */}
                 <div className="mt-6 text-left bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs">
                   <h4 className="text-xs font-black uppercase tracking-wider text-gray-700 mb-3">What happens next?</h4>
                   <div className="space-y-3">
@@ -529,15 +543,15 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
 
                 <div className="bg-gray-50 rounded-2xl p-4 text-xs sm:text-sm text-gray-700 border border-gray-200 text-left space-y-2.5 font-medium">
                   <p className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0"/>
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                     <span>Order confirmed for <strong>{formData.name}</strong></span>
                   </p>
                   <p className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-blue-600 shrink-0"/>
+                    <Truck className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>Dispatching within 24 hours to <strong>{formData.pincode}</strong></span>
                   </p>
                   <p className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-gray-500 shrink-0"/>
+                    <Lock className="w-4 h-4 text-gray-500 shrink-0" />
                     <span>Pay <strong>{STORE_CONFIG.symbol || '₹'}{displayPriceINR}</strong> on arrival</span>
                   </p>
                   {formData.email && (
@@ -547,7 +561,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                   )}
                 </div>
 
-                {/* WhatsApp Share */}
                 <div className="pt-2">
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(
@@ -557,19 +570,20 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
                     rel="noopener noreferrer"
                     className="min-h-11 flex items-center justify-center gap-2.5 w-full bg-[#25D366] hover:bg-[#20b858] active:scale-95 text-white font-bold py-3.5 rounded-2xl shadow-md transition-all text-sm sm:text-base"
                   >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
                     <span>Share on WhatsApp</span>
                   </a>
 
-                  <button 
+                  <button
                     onClick={() => {
                       setStage(STAGES.PINCODE_CHECK);
-                      setFormData({ 
-                        pincode: '', 
-                        phone: '', 
-                        name: '', 
-                        address: '', 
-                        email: '' 
+                      setFormData({
+                        pincode: '',
+                        phone: '',
+                        name: '',
+                        address: '',
+                        city: '',
+                        email: ''
                       });
                       setOrderId(null);
                       setError(null);
@@ -584,7 +598,6 @@ export default function CODCheckout({ product, embedded = false }: { product?: P
             )}
           </div>
 
-          {/* RIGHT COLUMN — Desktop Order Summary */}
           {stage !== STAGES.CONFIRMATION && !embedded && (
             <div className="hidden xl:block">
               <div className="sticky top-24">
