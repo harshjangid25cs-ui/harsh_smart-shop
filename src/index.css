@@ -4,3 +4,41 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ── Global safety net: prevent accidental horizontal scroll on any device ── */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  scroll-behavior: smooth;
+}
+
+/* ── iOS Safe Area Support (notch / home indicator) ── */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-top {
+  padding-top: max(0px, var(--safe-top));
+}
+.safe-bottom {
+  padding-bottom: max(0px, var(--safe-bottom));
+}
+
+/* ── Utility: hide scrollbar but keep scroll functionality ── */
+.no-scrollbar {
+  -ms-overflow-style: none;   /* IE / Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome / Safari / Opera */
+}
+
+/* ── Prevent iOS input zoom on focus (inputs must be 16px+ font) ── */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

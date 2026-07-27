@@ -134,7 +134,7 @@ export default function CODCheckout({ product }: { product: Product }) {
   return (
     <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 overflow-hidden">
       {/* Progress Header */}
-      <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
+      <div className="bg-gray-50 border-b border-gray-100 p-4 sm:p-6 flex justify-between items-center">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-green-600" />
           Secure COD Checkout
@@ -146,7 +146,7 @@ export default function CODCheckout({ product }: { product: Product }) {
         </div>
       </div>
 
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {error && (
           <div className="mb-6 p-4 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
