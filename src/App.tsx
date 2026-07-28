@@ -8,6 +8,16 @@ import AdminDashboard from './components/AdminDashboard';
 import OrderSuccess from './pages/OrderSuccess';
 import { ShieldCheck, Truck, HeadphonesIcon, RotateCcw, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { STORE_CONFIG } from './config';
+import LoginPage from './pages/LoginPage';
+import AccountLayout from './pages/account/AccountLayout';
+import AccountHome from './pages/account/AccountHome';
+import ProfilePage from './pages/account/ProfilePage';
+import OrdersPage from './pages/account/OrdersPage';
+import CouponsPage from './pages/account/CouponsPage';
+import AddressesPage from './pages/account/AddressesPage';
+import WishlistPage from './pages/account/WishlistPage';
+import NotificationsPage from './pages/account/NotificationsPage';
+import HeaderAccountMenu from './components/HeaderAccountMenu';
 
 function CheckoutPage() {
   return (
@@ -19,9 +29,12 @@ function CheckoutPage() {
             <span>Back to Cart</span>
           </Link>
           <span className="text-sm font-black text-gray-900 tracking-tight">{STORE_CONFIG.name || 'SmartShop'}</span>
-          <Link to="/cart" className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-11">
-            <ShoppingCart className="w-3.5 h-3.5" /> Cart
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <HeaderAccountMenu />
+            <Link to="/cart" className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-11">
+              <ShoppingCart className="w-3.5 h-3.5" /> Cart
+            </Link>
+          </div>
         </div>
       </header>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
@@ -85,6 +98,16 @@ export default function App() {
             <Route path="/checkout/success" element={<OrderSuccess />} />
             <Route path="/product/:id" element={<Storefront />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/account" element={<AccountLayout />}>
+              <Route index element={<AccountHome />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="orders" element={<OrdersPage />} />
+              <Route path="coupons" element={<CouponsPage />} />
+              <Route path="addresses" element={<AddressesPage />} />
+              <Route path="wishlist" element={<WishlistPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+            </Route>
           </Routes>
         </main>
         <Footer />

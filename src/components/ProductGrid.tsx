@@ -4,6 +4,7 @@ import { Product } from '../types';
 import { Search, ShoppingCart, Star, Check, Sparkles, SlidersHorizontal, Share2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STORE_CONFIG } from '../config';
+import HeaderAccountMenu from './HeaderAccountMenu';
 
 interface Filters {
   category: string;
@@ -286,7 +287,7 @@ export default function ProductGrid() {
       session_id: sessionId,
       product_id: product.id,
       quantity: existingIndex > -1 ? localCart[existingIndex].quantity : 1
-    }, { onConflict: 'session_id,product_id' }).catch(err => console.log("DB sync paused in offline dev:", err));
+    }, { onConflict: 'session_id,product_id' }).then(undefined, err => console.log("DB sync paused in offline dev:", err));
   };
 
   return (
@@ -336,7 +337,8 @@ export default function ProductGrid() {
               />
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <HeaderAccountMenu />
               <Link
                 to="/cart"
                 className="relative min-w-11 min-h-11 px-2.5 sm:px-3 py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200/80 text-gray-800 transition-all flex items-center justify-center gap-2"
@@ -454,8 +456,8 @@ export default function ProductGrid() {
 
 // Individual Product Card (Premium Flipkart-Scale Aesthetics)
 function ProductCard({ product, onAddToCart }: {
-  product: Product;
-  onAddToCart: (p: Product) => void
+  product: any;
+  onAddToCart: (p: any) => void
 }) {
   const [shareLabel, setShareLabel] = React.useState<'share' | 'copied'>('share');
   const discount = product.discount_percent || 0;

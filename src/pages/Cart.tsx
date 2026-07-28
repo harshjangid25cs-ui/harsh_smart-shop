@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { STORE_CONFIG } from '../config';
 import { CartItem as AppCartItem } from '../types';
 import { CartItem as CheckoutCartItem } from '../types/cart';
+import HeaderAccountMenu from '../components/HeaderAccountMenu';
 
 export default function Cart() {
   const [items, setItems] = useState<AppCartItem[]>([]);
@@ -83,7 +84,7 @@ export default function Cart() {
           session_id: sessionId,
           product_id: item.product_id,
           quantity: item.quantity
-        }, { onConflict: 'session_id,product_id' }).catch(() => {});
+        }, { onConflict: 'session_id,product_id' }).then(undefined, () => {});
       }
     }
   };
@@ -100,7 +101,7 @@ export default function Cart() {
         .delete()
         .eq('session_id', sessionId)
         .eq('product_id', productId)
-        .catch(() => {});
+        .then(undefined, () => {});
     }
   };
 
@@ -165,12 +166,15 @@ export default function Cart() {
   return (
     <div className="min-h-screen bg-[#f5f6f8] py-6 sm:py-8 px-4 sm:px-6">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
+        <div className="flex items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-bold text-gray-600 hover:text-black mb-2 min-h-11">
               <ArrowLeft className="w-4 h-4" /> Continue Shopping
             </Link>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-gray-900">Shopping Cart ({totalItemsCount} items)</h1>
+          </div>
+          <div className="pt-2 sm:pt-0 shrink-0">
+            <HeaderAccountMenu />
           </div>
         </div>
 

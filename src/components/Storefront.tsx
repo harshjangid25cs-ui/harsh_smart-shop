@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { STORE_CONFIG } from '../config';
 import { Link, useParams } from 'react-router-dom';
+import HeaderAccountMenu from './HeaderAccountMenu';
 
 const SAMPLE_FALLBACKS: Record<string, Product> = {
   '1': { id: '1', name: 'iPhone 15 Pro (128GB, Natural Titanium)', price: 12990000, category: 'electronics', brand: 'Apple', description: 'Forged in titanium with an A17 Pro chip, completely customizable Action button and versatile Pro camera system. Aerospace-grade titanium design makes it our lightest Pro models ever.', is_active: true, discount_percent: 8, rating: 4.9, review_count: 1420, image_url: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&q=80&w=800', created_at: new Date().toISOString() },
@@ -66,7 +67,7 @@ export default function Storefront() {
     supabase.from('cart_items').upsert({
       session_id: sessionId, product_id: product.id,
       quantity: existingIndex > -1 ? localCart[existingIndex].quantity : 1
-    }, { onConflict: 'session_id,product_id' }).catch(() => { });
+    }, { onConflict: 'session_id,product_id' }).then(undefined, () => { });
   };
 
   if (loading) return (
@@ -120,12 +121,15 @@ export default function Storefront() {
             <span className="hidden sm:inline">Back to All Products</span>
             <span className="sm:hidden">Back</span>
           </Link>
-          <Link
-            to="/cart"
-            className="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-colors min-h-11"
-          >
-            <ShoppingCart className="w-4 h-4" /> View Cart
-          </Link>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <HeaderAccountMenu />
+            <Link
+              to="/cart"
+              className="bg-gray-100 hover:bg-gray-200 px-3.5 sm:px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-colors min-h-11"
+            >
+              <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">View</span> Cart
+            </Link>
+          </div>
         </div>
       </header>
 
