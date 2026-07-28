@@ -18,6 +18,7 @@ import AddressesPage from './pages/account/AddressesPage';
 import WishlistPage from './pages/account/WishlistPage';
 import HeaderAccountMenu from './components/HeaderAccountMenu';
 import AuthCallback from './pages/AuthCallback';
+import NotificationsPage from './pages/account/NotificationsPage';
 
 function CheckoutPage() {
   return (
