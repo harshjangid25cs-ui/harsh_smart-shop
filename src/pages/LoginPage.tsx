@@ -71,6 +71,7 @@ export default function LoginPage() {
               full_name: fullName.trim(),
               phone: phone.trim(),
             },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });
 

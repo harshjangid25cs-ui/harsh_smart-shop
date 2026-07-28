@@ -16,8 +16,8 @@ import OrdersPage from './pages/account/OrdersPage';
 import CouponsPage from './pages/account/CouponsPage';
 import AddressesPage from './pages/account/AddressesPage';
 import WishlistPage from './pages/account/WishlistPage';
-import NotificationsPage from './pages/account/NotificationsPage';
 import HeaderAccountMenu from './components/HeaderAccountMenu';
+import AuthCallback from './pages/AuthCallback';
 
 function CheckoutPage() {
   return (
@@ -99,6 +99,7 @@ export default function App() {
             <Route path="/product/:id" element={<Storefront />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/account" element={<AccountLayout />}>
               <Route index element={<AccountHome />} />
               <Route path="profile" element={<ProfilePage />} />
