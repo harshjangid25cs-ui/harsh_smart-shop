@@ -18,7 +18,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
-  
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -26,25 +26,25 @@ serve(async (req) => {
 
   try {
     const body: CODRequest = await req.json();
-    
+
     // === VALIDATION ===
     if (!/^[6-9]\d{9}$/.test(body.phone)) {
       return new Response(
-        JSON.stringify({ error: "Invalid Indian phone number." }), 
+        JSON.stringify({ error: "Invalid Indian phone number." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!body.name || body.name.trim().length < 3) {
       return new Response(
-        JSON.stringify({ error: "Name must be at least 3 characters." }), 
+        JSON.stringify({ error: "Name must be at least 3 characters." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!body.address || body.address.trim().length < 10) {
       return new Response(
-        JSON.stringify({ error: "Please provide a complete address." }), 
+        JSON.stringify({ error: "Please provide a complete address." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -52,7 +52,7 @@ serve(async (req) => {
     // === BLOCKED PINCODES ===
     if (["999999", "000000"].includes(body.pincode)) {
       return new Response(
-        JSON.stringify({ error: "COD not available for this pincode." }), 
+        JSON.stringify({ error: "COD not available for this pincode." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -79,14 +79,14 @@ serve(async (req) => {
     if (insertError) {
       console.error("Order insert error:", insertError);
       return new Response(
-        JSON.stringify({ error: "Failed to create order: " + insertError.message }), 
+        JSON.stringify({ error: "Failed to create order: " + insertError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!order || !order.id) {
       return new Response(
-        JSON.stringify({ error: "Order creation failed." }), 
+        JSON.stringify({ error: "Order creation failed." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -98,17 +98,17 @@ serve(async (req) => {
         success: true,
         order_id: order.id,
         message: "Order placed successfully"
-      }), 
-      { 
+      }),
+      {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
 
   } catch (error: any) {
     console.error("COD Workflow Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Unexpected error occurred." }), 
+      JSON.stringify({ error: error.message || "Unexpected error occurred." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
